@@ -1,0 +1,1 @@
+{"version":1,"defects":{"tests\\VpayTest::testGetError":5,"tests\\VpayTest::testCreate":8,"tests\\tests\\VpayTest::testCreate":7,"tests\\tests\\VpayTest::test__construct":7},"times":{"tests\\VpayTest::testGetError":0.006,"tests\\VpayTest::testCreate":0.004,"tests\\tests\\VpayTest::testCreate":0.736,"tests\\tests\\VpayTest::test__construct":0.684}}
