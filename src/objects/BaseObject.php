@@ -4,7 +4,7 @@ namespace Ankio\objects;
 
 class BaseObject
 {
-    public function __construct($args)
+    public function __construct($args = [])
     {
         foreach ($args as $key => $item) {
             if (isset($this->$key)) {
