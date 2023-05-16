@@ -11,8 +11,8 @@
  */
 spl_autoload_register(function($class)
 {
-    $class = str_replace('Ankio\\','/', $class);
-    $file =__DIR__ .  $class . '.php';
+    $class = str_replace(['Ankio\\',"\\"],DIRECTORY_SEPARATOR, $class);
+    $file =__DIR__ . $class . '.php';
     if (file_exists($file)) include_once $file;
 
 }, true, true);
