@@ -26,8 +26,9 @@ class PaySign
 
     private static function getSign($args, $secretKey): string
     {
-        foreach ($args as $key => $val) {
+        foreach ($args as $key => &$val) {
             if (empty($val)) unset($args[$key]);
+            $val  =strval($val);
         }
         ksort($args);
         $String = self::formatBizQueryParaMap($args);

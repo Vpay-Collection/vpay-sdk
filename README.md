@@ -1,18 +1,30 @@
 ## 简介
 Vpay接入SDK
 
-## 使用
+## 引入SDK
 
-这里给出的方案是将该仓库作为子模块使用，你也可以直接复制src路径到指定目录下使用
+### 作为子模块使用
 ```shell
-git add submoduls https://github.com/Vpay-Colloction/vpay-sdk
+git add submodule https://github.com/Vpay-Colloction/vpay-sdk
+git  submodule init
+git  submodule update --remote
+```
+### 通过`Composer`调用
+```shell
+composer require ankio/vpay-sdk
 ```
 
 - 创建订单
 
 ```php
-$crateObject = new \Ankio\objects\PayCreateObject();
-$crateObject->price = 0.01;//需要支付的金额
+$order = new \Ankio\objects\PayCreateObject();
+$order->app_item = "商品名称";
+$order->appid = $config->id;
+$order->param = json_encode(array_merge(arg(),["item"=>$item->toArray()]));
+$order->price = $item->item_price;
+$order->pay_type =$pay_type;
+$order->notify_url = url("api_shop","main","notify");
+$order->return_url = url("shop","main","return");
 $crateObject->
 (new \Ankio\Vpay(new \Ankio\PayConfig($config)))->create();
 ```
