@@ -67,7 +67,7 @@ class Vpay
 
         //预防恶意刷单，在订单有效期内重复刷取低价
         if(isset($_SESSION[$key])&&isset($_SESSION[$key."_timeout"])&&$_SESSION[$key."_timeout"]>time()){
-            return $_SESSION[$key];
+            return unserialize($_SESSION[$key]);
         }
 
         $params = $this->createSign($params);
@@ -85,7 +85,7 @@ class Vpay
             if($json->code===200){
                 $object = new OrderObject($json->data);
                 $_SESSION['key'] = $key;
-                $_SESSION[$key] = $object;
+                $_SESSION[$key] = serialize($object);
                 $_SESSION[$key."_timeout"] = time() + $this->config->time*60;
                return $object;
             }
