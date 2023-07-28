@@ -17,6 +17,7 @@ use Ankio\objects\OrderObject;
 use Ankio\objects\PayCreateObject;
 use Ankio\objects\PayNotifyObject;
 use Ankio\objects\StateObject;
+use library\vpay\src\PayException;
 
 class Vpay
 {
@@ -33,7 +34,7 @@ class Vpay
 
 
     private PayConfig $config;
-    private string $error = "";
+
 
     /**
      * Pay constructor.
@@ -45,29 +46,31 @@ class Vpay
         if(session_status()!==PHP_SESSION_ACTIVE ) session_start();
     }
 
-    /**
-     * 获取错误信息
-     * @return string
-     */
-    public function getError(): string
-    {
-        return $this->error;
-    }
 
     /**
      * 创建订单
      * @param PayCreateObject $createObject
-     * @return false|mixed
+     * @return OrderObject
+     * @throws PayException
      */
-    public function create(PayCreateObject $createObject){
+    public function create(PayCreateObject $createObject): OrderObject
+    {
 
         $params = $createObject->toArray();
-
-        $key = md5($createObject->param.$createObject->price.$createObject->app_item.$createObject->pay_type);
-
         //预防恶意刷单，在订单有效期内重复刷取低价
-        if(isset($_SESSION[$key])&&isset($_SESSION[$key."_timeout"])&&$_SESSION[$key."_timeout"]>time()){
-            return unserialize($_SESSION[$key]);
+        if(isset($_SESSION["pay_order"])&&isset($_SESSION["pay_order_timeout"])&&$_SESSION["pay_order_timeout"]>time()){
+            /**
+             * @var OrderObject $order
+             */
+            $order = unserialize($_SESSION["pay_order"]);
+            try{
+                if($this->state($order->order_id)->state==self::WAIT){
+                    return $order;
+                }
+            }catch (PayException){
+
+            }
+
         }
 
         $params = $this->createSign($params);
@@ -79,24 +82,20 @@ class Vpay
 
         $result = $this->request($this->config->getCreateOrder(),$params);
 
-        $json = @json_decode($result);
+        $json = json_decode($result);
 
         if($json){
             if($json->code===200){
                 $object = new OrderObject($json->data);
-                $_SESSION['key'] = $key;
-                $_SESSION[$key] = serialize($object);
-                $_SESSION[$key."_timeout"] = time() + $this->config->time*60;
+                $_SESSION["pay_order"] = serialize($object);
+                $_SESSION["pay_order_timeout"] = time() + $this->config->time*60;
                return $object;
             }
-       //         return $json->data;
-            else{
-                $this->error=$json->msg;
-                return false;
-            }
+
+            throw new PayException($json->msg);
+
         }else{
-            $this->error='远程支付站点发生问题，或创建订单的地址有误:'.$this->config->getCreateOrder().$result;
-            return false;
+            throw new PayException('远程支付站点发生问题，或创建订单的地址有误:'.$this->config->getCreateOrder().$result);
         }
 
     }
@@ -104,71 +103,58 @@ class Vpay
     /**
      * 签名校验，此处校验的是notify或者return的签名
      * @param $arg
-     * @return bool
+     * @throws PayException
      */
-    private function checkSign($arg): bool
+    private function checkSign($arg): void
     {
         $result = PaySign::checkSign($arg,$this->config->key);
         if(!$result){
-            $this->error = "签名校验失败";
-            return false;
+            throw new PayException("签名校验失败");
         }
         if(!isset($arg['t'])||time() - intval($arg['t']) > $this->config->time*60){
-            $this->error = "该请求已经超时";
-            return false;
+            throw new PayException("该请求已经超时");
         }
-        return true;
 
     }
 
     /**
      * 响应同步回调参数，此处的数据在于$_GET
-     * @return bool
+     * @throws PayException
      */
-    public function payReturn(): bool
+    public function payReturn(): void
     {
-       $bool=$this->CheckSign($_GET);
-       //$payId=$this->checkClient($arg['price'],$arg['param']);
-        if($bool){
-            if(!isset($_SESSION['key'])){
-                $this->error="支付已完成，请勿重复刷新。";
-                return false;
-            }
-            $this->closeClient();
-            return true;
-        }else{
-            //   if($bool)$this->error='支付已完成！请不要重复刷新！';
-            return false;
+        $this->checkSign($_GET);
+        if(!isset($_SESSION['pay_order'])){
+            throw new PayException("支付已完成，请勿重复刷新。");
         }
+        $this->closeClient();
     }
 
 
     /**
      * 异步回调，成功后默认输出了“success”，需要在成功后结束程序运行
      * @param $callback mixed 需要提供回调函数，$callback({@link PayNotifyObject}$notifyObject)
-     * @return bool
+     * @throws PayException
      */
-    public function payNotify($callback): bool
+    public function payNotify(mixed $callback): void
     {
         //检查sign
-        if(!$this->checkSign($_POST))return false;
+        $this->checkSign($_POST);
         if(is_callable($callback)){
             $callback(new PayNotifyObject($_POST));
         }else{
-            $this->error = "回调函数错误";
-            return false;
+            throw new PayException("回调函数错误。");
         }
         echo "success";
-        return true;
 
     }//此处是异步回调
 
     /**
      * 关闭订单
      * @param $orderId string 根据创建订单返回的order_id关闭订单
-     * @return bool
+     * @throws PayException
      */
-    public function close(string $orderId): bool
+    public function close(string $orderId): void
     {
         $this->closeClient();
        $result = $this->request($this->config->closeOrder(),$this->createSign([
@@ -176,39 +162,40 @@ class Vpay
        ]));
         $json=json_decode($result);
 
-        if($json->code===200){
-            $this->error=$json->msg;
-            return false;
-        }else return true;
+        if($json->code!==200){
+            throw new PayException($json->msg);
+        }
     }//关闭订单，主要用于用户自己开启了之后使用
 
     /**
      * 根据OrderId查询当前订单状态
      * @param string $orderId
-     * @return false|StateObject 返回object就是查询成功，否则就是失败
+     * @return StateObject 返回object就是查询成功，否则就是失败
+     * @throws PayException
      */
-    public function state(string $orderId){
+    public function state(string $orderId): StateObject
+    {
         $result = $this->request($this->config->getOrderState(),$this->createSign([
             'order_id'=>$orderId
         ]));
         $json = json_decode($result);
-        if($json->state===200)return new StateObject($json->data);
-        $this->error = $json->msg;
-        return false;
+        if($json->code===200){
+            return new StateObject($json->data);
+        }
+        throw new PayException($json->msg);
     }
 
     /**
      * 关闭客户端订单
      * @return void
      */
-    private function closeClient(){
-        if(!isset($_SESSION['key'])){
+    private function closeClient(): void
+    {
+        if(!isset($_SESSION['pay_order'])){
             return;
         }
-        $key = $_SESSION["key"];
-        unset($_SESSION['key']);
-        unset($_SESSION[$key]);
-        unset($_SESSION[$key."_timeout"]);
+        unset($_SESSION['pay_order']);
+        unset($_SESSION["pay_order_timeout"]);
     }
 
     /**
@@ -217,7 +204,8 @@ class Vpay
      * @param $post_data ?array 携带数据
      * @return bool|string
      */
-   private function request(string $url, ?array $post_data) {
+   private function request(string $url, ?array $post_data): bool|string
+   {
         $curl = curl_init();
         curl_setopt($curl, CURLOPT_URL, $url);
         curl_setopt($curl, CURLOPT_POST, true);

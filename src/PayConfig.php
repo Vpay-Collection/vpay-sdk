@@ -36,7 +36,7 @@ class PayConfig
 
     public function getOrderState(): string
     {
-        return $this->host."/order/state";
+        return $this->host."/api/pay/payState";
     }
 
     public function closeOrder(): string
