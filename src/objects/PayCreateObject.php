@@ -21,5 +21,7 @@ class PayCreateObject extends BaseObject
      */
     public string $appid = "0";//应用ID
 
-
+    function hash(){
+        return md5(join(",",get_object_vars($this)));
+    }
 }

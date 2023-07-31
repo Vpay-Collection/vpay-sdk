@@ -55,14 +55,14 @@ class Vpay
      */
     public function create(PayCreateObject $createObject): OrderObject
     {
-
+        $hash = $createObject->hash();
         $params = $createObject->toArray();
         //预防恶意刷单，在订单有效期内重复刷取低价
-        if(isset($_SESSION["pay_order"])&&isset($_SESSION["pay_order_timeout"])&&$_SESSION["pay_order_timeout"]>time()){
+        if(isset($_SESSION["pay_order".$hash])&&isset($_SESSION["pay_order_timeout".$hash])&&$_SESSION["pay_order_timeout".$hash]>time()){
             /**
              * @var OrderObject $order
              */
-            $order = unserialize($_SESSION["pay_order"]);
+            $order = unserialize($_SESSION["pay_order".$hash]);
             try{
                 if($this->state($order->order_id)->state==self::WAIT){
                     return $order;
@@ -75,10 +75,7 @@ class Vpay
 
         $params = $this->createSign($params);
 
-        //$params['sign'] = $sign;
 
-       // var_dump($params);exit();
-        //$_SESSION['__pay_timeout']=strtotime('+'.$this->config->time.' min');
 
         $result = $this->request($this->config->getCreateOrder(),$params);
 
@@ -87,8 +84,9 @@ class Vpay
         if($json){
             if($json->code===200){
                 $object = new OrderObject($json->data);
-                $_SESSION["pay_order"] = serialize($object);
-                $_SESSION["pay_order_timeout"] = time() + $this->config->time*60;
+                $_SESSION["pay_order"] = $hash;
+                $_SESSION["pay_order".$hash] = serialize($object);
+                $_SESSION["pay_order_timeout".$hash] = time() + $this->config->time*60;
                return $object;
             }
 
@@ -124,9 +122,6 @@ class Vpay
     public function payReturn(): void
     {
         $this->checkSign($_GET);
-        if(!isset($_SESSION['pay_order'])){
-            throw new PayException("支付已完成，请勿重复刷新。");
-        }
         $this->closeClient();
     }
 
@@ -194,8 +189,9 @@ class Vpay
         if(!isset($_SESSION['pay_order'])){
             return;
         }
-        unset($_SESSION['pay_order']);
-        unset($_SESSION["pay_order_timeout"]);
+        $hash = $_SESSION['pay_order'];
+        unset($_SESSION['pay_order'.$hash]);
+        unset($_SESSION["pay_order_timeout".$hash]);
     }
 
     /**
