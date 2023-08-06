@@ -75,8 +75,6 @@ class Vpay
 
         $params = $this->createSign($params);
 
-
-
         $result = $this->request($this->config->getCreateOrder(),$params);
 
         $json = json_decode($result);
