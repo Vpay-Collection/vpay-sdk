@@ -26,9 +26,10 @@ class Vpay
     const WAIT = 1;//等待支付
     const CLOSE = -1;//已关闭
 
-    const PAY_WECHAT = 1; //微信收款
     const PAY_ALIPAY = 2;//支付宝收款
-    const PAY_QQ= 3;//QQ
+    const PAY_WECHAT_APP = 3; //微信App收款
+    const PAY_ALIPAY_APP = 4; //支付宝App收款
+
 
 
 
@@ -125,9 +126,10 @@ class Vpay
      * 响应同步回调参数，此处的数据在于$_GET
      * @return bool
      */
-    public function payReturn(): bool
+    public function payReturn($data = []): bool
     {
-       $bool=$this->CheckSign($_GET);
+        if(empty($data))$data = $_GET;
+       $bool=$this->CheckSign($data);
        //$payId=$this->checkClient($arg['price'],$arg['param']);
         if($bool){
             if(!isset($_SESSION['key'])){
